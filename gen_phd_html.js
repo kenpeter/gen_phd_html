@@ -36,10 +36,10 @@ assert.ok(templateFile.lastIndexOf('ejs') == (templateFile.length - 'ejs'.length
 assert.ok(outputFile.lastIndexOf('html') == (outputFile.length - 'html'.length), "output file should be an .html file");
 
 // make sure we use the correct line-endings on Windows
-var EOL = (process.platform === 'win32' ? '\r\n' : '\n')
+var EOL = (process.platform === 'win32' ? '\r\n' : '\n');
 
 // build the template
-var template = ejs.compile(fs.readFileSync(templateFile, 'utf8'))
+var template = ejs.compile(fs.readFileSync(templateFile, 'utf8'));
 
 // http://stackoverflow.com/questions/558981/iterating-through-list-of-keys-for-associative-array-in-json
 var obj_output = {
@@ -65,9 +65,9 @@ _parse_csv(inputFile).then(function(data){
   for(var i=0; i < data.length; ++i) {
     var obj = {};
 
-    full_name = data[i][1];
-    email = data[i][2];
-    school = data[i][4];
+    full_name = data[i][1].trim();
+    email = data[i][2].trim();
+    school = data[i][4].trim();
 
     obj.full_name = full_name;
     obj.email = email;
@@ -91,7 +91,7 @@ _parse_csv(inputFile).then(function(data){
       obj_output.soll.push(obj);
     }
     else {
-      console.log('-----else-------');
+      //console.log('-----else-------');
     }
   }
 
@@ -105,14 +105,18 @@ _parse_csv(inputFile).then(function(data){
   obj_output.soll.sort(_sort_by_first_name);
 
   //test
-  _print_name("");
-
+  /*
+  _my_print("");
   _print_name_apen(obj_output.ai);
   _print_name_apen(obj_output.cc);
   _print_name_apen(obj_output.ssps);
   _print_name_apen(obj_output.shaps);
   _print_name_apen(obj_output.soll);
+  */
 
+  // Write
+  _write_html(obj_output);
+  
 
 },function(reason){
   console.error(reason); // error;
@@ -141,10 +145,10 @@ function _parse_csv(file) {
   });
 }
 
-
+// http://stackoverflow.com/questions/6712034/sort-array-by-firstname-alphabetically-in-javascript
 function _sort_by_first_name(a, b) {
   //test
-  debugger;
+  //debugger;
 
   var the_a = a.full_name.split(" ")[0].toLowerCase();
   var the_b = b.full_name.split(" ")[0].toLowerCase();
@@ -156,6 +160,23 @@ function _sort_by_first_name(a, b) {
       
   return 0;
 }
+
+
+function _write_html(data) {
+  var buffer = "";
+  var ai = data.ai;
+
+  buffer += "<h3>" + ai[0].school + "</h3>";
+  buffer += "<table><tr>";
+  for(var i=0; i < ai.length; i++) {
+    buffer += "<td>" + ai[i].full_name  + "</td>";
+  }
+  buffer += "</tr></table>";
+
+  console.log(buffer);
+}
+
+
 
 
 function _print_name_apen(data) {
@@ -173,7 +194,7 @@ function _my_apen_write(file_name, data) {
   });
 }
 
-function _print_name(data) {
+function _my_print(data) {
   _my_write(test_output_file, data);
 }
 

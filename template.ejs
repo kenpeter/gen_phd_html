@@ -1,1 +1,6 @@
-<h4>{Full name} - {Email}</h4>
+<% debugger; var ai = data.ai; %>
+<ul>
+<% for(var i=0; i<ai.length; i++) {%>
+   <li><%= ai[i].full_name %></li>
+<% } %>
+</ul>
