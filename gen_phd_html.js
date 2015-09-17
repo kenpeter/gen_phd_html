@@ -1,3 +1,5 @@
+"use strict";
+
 // https://gist.github.com/RandomEtc/1803645
 
 
@@ -19,6 +21,7 @@ var assert = require('assert'); // node.js library for testing for error conditi
 
 var csv_parse = require('csv-parse');
 var Promise = require('promise');
+var validator = require('validator');
 
 // make sure EJS is configured to use curly braces for templates
 ejs.open = '{{';
@@ -58,8 +61,13 @@ _parse_csv(inputFile).then(function(data){
  
   var full_name = '';
   var email = '';
+  var phone = '';  
   var school = ''; 
   var school_lower = '';
+
+  var research_area = ''; 
+  var thesis = ''; 
+  var profile = '';
 
   // http://stackoverflow.com/questions/6260756/how-to-stop-javascript-foreach
   for(var i=0; i < data.length; ++i) {
@@ -67,11 +75,18 @@ _parse_csv(inputFile).then(function(data){
 
     full_name = data[i][1].trim();
     email = data[i][2].trim();
+    phone = data[i][3].trim();  
     school = data[i][4].trim();
+    research_area = _get_research_area(data[i]);  
+    thesis = data[i][10].trim();
+    profile = data[i][11].trim();
 
     obj.full_name = full_name;
     obj.email = email;
     obj.school = school;
+    obj.research_area = research_area;
+    obj.thesis = thesis;
+    obj.profile = _get_profile(profile, full_name);
 
     school_lower = obj.school.toLowerCase();
     if(school_lower == "asia institute") {
@@ -164,19 +179,104 @@ function _sort_by_first_name(a, b) {
 
 function _write_html(data) {
   var buffer = "";
-  var ai = data.ai;
 
-  buffer += "<h3>" + ai[0].school + "</h3>";
-  buffer += "<table><tr>";
-  for(var i=0; i < ai.length; i++) {
-    buffer += "<td>" + ai[i].full_name  + "</td>";
-  }
-  buffer += "</tr></table>";
+  buffer += _write_html_table(data.ai);
+  buffer += _write_html_table(data.cc);
+  buffer += _write_html_table(data.ssps); 
+  buffer += _write_html_table(data.shaps);
+  buffer += _write_html_table(data.soll);
 
+  // Output
   console.log(buffer);
 }
 
 
+function _write_html_table(data) {
+  var buffer = '';
+  var url_display = '';  
+  var full_name_display = '';
+
+  buffer += "<h3>" + data[0].school + "</h3>";
+  buffer += "<table>";
+
+  for(var i=0; i < data.length; i++) {
+    buffer += "<tr>";
+    buffer += data[i].profile;
+    buffer += "<td>" + data[i].email  + "</td>";
+    buffer += "<td>" + data[i].research_area  + "</td>";
+    buffer += "<td>" + data[i].thesis  + "</td>";
+    buffer += "</tr>";
+  }
+  buffer += "</table>";
+
+  return buffer;
+}
+
+
+function _get_research_area(data) {
+  var index = 5;
+  var len = 5;
+  var internal_index = 0;
+  var research_area = '';
+
+  // There are 5 research areas across the column.
+  for(var i=0; i<len; i++) {
+    internal_index = i + index;
+    research_area = data[internal_index];
+
+    if(research_area) {
+      return research_area;  
+    }
+    else {
+      continue;
+    } 
+  }
+
+  return research_area;
+}
+
+function _get_profile(profile, full_name) {
+  /* 
+    Sample data:
+    * yue.qiu@studio.unibo.it
+    * Empty string
+    * upi.academia.edu/HaniYulindrasari
+    * some random string
+    * 
+    * https://unimelb.academia.edu/RyanEdwards  
+  */  
+
+  var the_return = '';
+
+  // http://www.w3schools.com/jsref/jsref_regexp_test.asp
+  if(profile === '') {
+    the_return = '<td>' + full_name  + '</td>';
+
+    //console.log("empty");
+  }
+  else if(validator.isEmail(profile)) {
+    the_return = '<td>' + '<a href="' + 'mailto:' + profile + '">' + full_name  + '</a></td>';
+
+    //console.log("email: " + the_return);
+  }
+  else if(validator.isURL(profile, {require_protocol: true})) {
+    the_return = '<td>' + '<a href="' + profile + '">' + full_name  + '</a></td>';
+
+    //console.log("url: " + the_return);
+  }
+  else if(validator.isURL(profile, {require_protocol: false})) {
+    the_return = '<td>' + '<a href="' + 'http://' + profile + '">' + full_name  + '</a></td>';
+
+    //console.log("no proto url: " + the_return);
+  }
+  else {
+    the_return = '<td>' + full_name  + '</td>';
+
+    //console.log("else set empty: " + profile)
+  }
+
+  return the_return;
+}
 
 
 function _print_name_apen(data) {
