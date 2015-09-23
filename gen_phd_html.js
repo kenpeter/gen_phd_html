@@ -196,8 +196,16 @@ function _write_html_table(data) {
   var url_display = '';  
   var full_name_display = '';
 
-  buffer += "<h3>" + data[0].school + "</h3>";
-  buffer += "<table>";
+  buffer += "<h3 class='school-title'>" + data[0].school + "</h3>";
+  buffer += "<table class='table-student'>";
+
+  // Header  
+  buffer += "<tr>";
+  buffer += "<th>Full name</th>";
+  buffer += "<th>Email</th>";
+  buffer += "<th>Research area</th>";
+  buffer += "<th>Thesis</th>";
+  buffer += "</tr>";
 
   for(var i=0; i < data.length; i++) {
     buffer += "<tr>";
