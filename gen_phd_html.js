@@ -48,9 +48,9 @@ var template = ejs.compile(fs.readFileSync(templateFile, 'utf8'));
 var obj_output = {
   "ai": [],
   "cc": [],
-  "ssps": [],
   "shaps": [],
-  "soll": []
+  "soll": [],
+  "ssps": []
 }; 
 
 //test
@@ -79,9 +79,9 @@ _parse_csv(inputFile).then(function(data){
     school = data[i][4].trim();
     research_area = _get_research_area(data[i]);  
     thesis = data[i][10].trim();
-    profile = data[i][11].trim();
+    profile = data[i][12].trim();
 
-    obj.full_name = full_name;
+    obj.full_name = _destill_full_name(full_name);
     obj.email = email;
     obj.school = school;
     obj.research_area = research_area;
@@ -90,20 +90,30 @@ _parse_csv(inputFile).then(function(data){
 
     school_lower = obj.school.toLowerCase();
     if(school_lower == "asia institute") {
-      obj_output.ai.push(obj);
+      if(!_is_existed(obj_output.ai, obj.full_name)) {
+        obj_output.ai.push(obj);
+      }
     }
     else if(school_lower == "school of culture and communication")
     {
-      obj_output.cc.push(obj);
+      if(!_is_existed(obj_output.cc, obj.full_name)) {
+        obj_output.cc.push(obj);
+      }
     }
     else if(school_lower == "school of social and political sciences") {
-      obj_output.ssps.push(obj);
+      if(!_is_existed(obj_output.ssps, obj.full_name)) {
+        obj_output.ssps.push(obj);
+      }
     }
     else if(school_lower == "school of historical and philosophical studies") {
-      obj_output.shaps.push(obj);
+      if(!_is_existed(obj_output.shaps, obj.full_name)) {
+        obj_output.shaps.push(obj);
+      }
     }
     else if(school_lower == "school of languages and linguistics") {
-      obj_output.soll.push(obj);
+      if(!_is_existed(obj_output.soll, obj.full_name)) {
+        obj_output.soll.push(obj);
+      }
     }
     else {
       //console.log('-----else-------');
@@ -181,41 +191,49 @@ function _write_html(data) {
   var buffer = "";
 
   buffer += _write_html_table(data.ai);
-  buffer += _write_html_table(data.cc);
-  buffer += _write_html_table(data.ssps); 
+  buffer += _write_html_table(data.cc); 
   buffer += _write_html_table(data.shaps);
   buffer += _write_html_table(data.soll);
+  buffer += _write_html_table(data.ssps);
 
   // Output
+  console.log();
+  console.log("Needed html");
   console.log(buffer);
 }
 
 
 function _write_html_table(data) {
   var buffer = '';
-  var url_display = '';  
-  var full_name_display = '';
 
-  buffer += "<h3 class='school-title'>" + data[0].school + "</h3>";
-  buffer += "<table class='table-student'>";
+  if(data.length > 0) {
+    var url_display = '';  
+    var full_name_display = '';
 
-  // Header  
-  buffer += "<tr>";
-  buffer += "<th>Full name</th>";
-  buffer += "<th>Email</th>";
-  buffer += "<th>Research area</th>";
-  buffer += "<th>Thesis</th>";
-  buffer += "</tr>";
+    buffer += "<h3 class='school-title'>" + data[0].school + "</h3>";
+    buffer += "<table class='table-student'>";
 
-  for(var i=0; i < data.length; i++) {
+    // Header  
     buffer += "<tr>";
-    buffer += data[i].profile;
-    buffer += "<td>" + data[i].email  + "</td>";
-    buffer += "<td>" + data[i].research_area  + "</td>";
-    buffer += "<td>" + data[i].thesis  + "</td>";
+    buffer += "<th>Full name</th>";
+    buffer += "<th>Email</th>";
+    buffer += "<th>Research area</th>";
+    buffer += "<th>Thesis</th>";
     buffer += "</tr>";
+
+    for(var i=0; i < data.length; i++) {
+      buffer += "<tr>";
+      buffer += data[i].profile;
+      buffer += "<td>" + data[i].email  + "</td>";
+      buffer += "<td>" + data[i].research_area  + "</td>";
+      buffer += "<td>" + data[i].thesis  + "</td>";
+      buffer += "</tr>";
+    }
+    buffer += "</table>";
   }
-  buffer += "</table>";
+  else {
+    buffer = '';
+  }
 
   return buffer;
 }
@@ -263,17 +281,29 @@ function _get_profile(profile, full_name) {
     //console.log("empty");
   }
   else if(validator.isEmail(profile)) {
-    the_return = '<td>' + '<a href="' + 'mailto:' + profile + '">' + full_name  + '</a></td>';
+    // It turns out, we only care external url, not email.
+    //the_return = '<td>' + '<a href="' + 'mailto:' + profile + '">' + full_name  + '</a></td>';
+    the_return = '<td>' + full_name  + '</td>';
 
     //console.log("email: " + the_return);
   }
   else if(validator.isURL(profile, {require_protocol: true})) {
-    the_return = '<td>' + '<a href="' + profile + '">' + full_name  + '</a></td>';
+    if(_is_url_we_want(profile)) {
+      the_return = '<td>' + '<a href="' + profile + '">' + full_name  + '</a></td>';
+    }
+    else {
+      the_return = '<td>' + full_name  + '</td>';
+    }
 
     //console.log("url: " + the_return);
   }
   else if(validator.isURL(profile, {require_protocol: false})) {
-    the_return = '<td>' + '<a href="' + 'http://' + profile + '">' + full_name  + '</a></td>';
+    if(_is_url_we_want(profile)) {
+      the_return = '<td>' + '<a href="' + 'http://' + profile + '">' + full_name  + '</a></td>';
+    }
+    else {
+      the_return = '<td>' + full_name  + '</td>';  
+    }
 
     //console.log("no proto url: " + the_return);
   }
@@ -286,6 +316,76 @@ function _get_profile(profile, full_name) {
   return the_return;
 }
 
+
+function _is_existed(my_array, my_text) {
+  for(var i=0; i<my_array.length; i++) {
+    var full_name = my_array[i].full_name;
+
+    if( full_name.indexOf(my_text) !== -1 ) {
+      //test
+      console.log("duplicated: " + my_text);
+      return true;
+    }
+    else {
+      
+    }
+  }
+
+  return false;
+}
+
+
+function _destill_full_name(full_name) {
+  // http://stackoverflow.com/questions/9932957/javascript-remove-character-from-a-string
+  var the_return = '';
+
+  var orig_full_name = full_name;
+  var title = /^Mr\s*/gi;
+
+  // http://stackoverflow.com/questions/6603015/check-whether-a-string-matches-a-regex
+  if(title.test(full_name)) {
+    the_return = full_name.replace(title, '');
+    console.log("Old name: " + orig_full_name + " | " + "New name: " + the_return);
+  }
+  else {
+    the_return = full_name;
+  }
+
+  return the_return;
+}
+
+
+function _is_url_we_want(url) {
+  var orig_url = url;
+  var condi = true;
+
+  /*
+    Sample data not what we want
+
+    * https://www.academia.edu
+    * www.academia.edu
+    * http://www.linkedin.com/hp/?dnr=q1HKzUxwJqMGTFjSdgquzjats9MGTFF8f5CJ
+
+  */
+
+  if(/^https?:\/\/www\.academia\.edu$/.test(url)) {
+    console.log("not wanted url: " + url);
+    condi = false;    
+  }
+  else if(/^www\.academia\.edu$/.test(url)) { 
+    console.log("not wanted url: " + url);
+    condi = false;
+  }
+  else if(/^https?:\/\/www\.linkedin\.com\/hp\/\?dnr=q1HKzUxwJqMGTFjSdgquzjats9MGTFF8f5CJ$/.test(url)) {
+    console.log("not wanted url: " + url);
+    condi = false;
+  }
+  else {
+    condi = true;
+  }
+
+  return condi;
+}
 
 function _print_name_apen(data) {
   _my_apen_write(test_output_file, "\n-start-\n");
