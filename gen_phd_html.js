@@ -22,6 +22,7 @@ var assert = require('assert'); // node.js library for testing for error conditi
 var csv_parse = require('csv-parse');
 var Promise = require('promise');
 var validator = require('validator');
+var natural = require('natural');
 
 // make sure EJS is configured to use curly braces for templates
 ejs.open = '{{';
@@ -50,7 +51,8 @@ var obj_output = {
   "cc": [],
   "shaps": [],
   "soll": [],
-  "ssps": []
+  "ssps": [],
+  "total": [] // This stores everything
 }; 
 
 //test
@@ -71,6 +73,16 @@ _parse_csv(inputFile).then(function(data){
 
   // http://stackoverflow.com/questions/6260756/how-to-stop-javascript-foreach
   for(var i=0; i < data.length; ++i) {
+    // Skip the first row, as they are titles.
+    if(i === 0) {
+      continue;
+    }
+
+    // If full_name is empty, then assume the entire row is empty.
+    if(!data[i][1].trim()) {
+      continue;
+    }
+
     var obj = {};
 
     full_name = data[i][1].trim();
@@ -81,14 +93,17 @@ _parse_csv(inputFile).then(function(data){
     thesis = data[i][10].trim();
     profile = data[i][12].trim();
 
-    obj.full_name = _destill_full_name(full_name);
+    obj.full_name = _destill_full_name(i, full_name);
     obj.email = email;
     obj.school = school;
     obj.research_area = research_area;
     obj.thesis = thesis;
-    obj.profile = _get_profile(profile, full_name);
+    obj.profile = _get_profile(i, profile, full_name);
 
     school_lower = obj.school.toLowerCase();
+
+
+    /*
     if(school_lower == "asia institute") {
       if(!_is_existed(obj_output.ai, obj.full_name)) {
         obj_output.ai.push(obj);
@@ -118,7 +133,19 @@ _parse_csv(inputFile).then(function(data){
     else {
       //console.log('-----else-------');
     }
-  }
+    */
+
+    if(_is_existed(i, obj_output.total, obj) > 0) {
+
+    }
+    else {
+      
+    }
+
+    // Push to total array
+    obj_output.total.push(obj);
+
+  } // End for loop
 
   // http://stackoverflow.com/questions/24269624/is-javascript-array-sort-asynchronous
 
@@ -128,16 +155,6 @@ _parse_csv(inputFile).then(function(data){
   obj_output.ssps.sort(_sort_by_first_name);  
   obj_output.shaps.sort(_sort_by_first_name);
   obj_output.soll.sort(_sort_by_first_name);
-
-  //test
-  /*
-  _my_print("");
-  _print_name_apen(obj_output.ai);
-  _print_name_apen(obj_output.cc);
-  _print_name_apen(obj_output.ssps);
-  _print_name_apen(obj_output.shaps);
-  _print_name_apen(obj_output.soll);
-  */
 
   // Write
   _write_html(obj_output);
@@ -198,8 +215,9 @@ function _write_html(data) {
 
   // Output
   console.log();
-  console.log("Needed html");
-  console.log(buffer);
+  //console.log("Needed html");
+  //console.log(buffer);
+  console.log();
 }
 
 
@@ -261,7 +279,7 @@ function _get_research_area(data) {
   return research_area;
 }
 
-function _get_profile(profile, full_name) {
+function _get_profile(row_index, profile, full_name) {
   /* 
     Sample data:
     * yue.qiu@studio.unibo.it
@@ -288,7 +306,7 @@ function _get_profile(profile, full_name) {
     //console.log("email: " + the_return);
   }
   else if(validator.isURL(profile, {require_protocol: true})) {
-    if(_is_url_we_want(profile)) {
+    if(_is_url_we_want(row_index, profile)) {
       the_return = '<td>' + '<a href="' + profile + '">' + full_name  + '</a></td>';
     }
     else {
@@ -298,7 +316,7 @@ function _get_profile(profile, full_name) {
     //console.log("url: " + the_return);
   }
   else if(validator.isURL(profile, {require_protocol: false})) {
-    if(_is_url_we_want(profile)) {
+    if(_is_url_we_want(row_index, profile)) {
       the_return = '<td>' + '<a href="' + 'http://' + profile + '">' + full_name  + '</a></td>';
     }
     else {
@@ -317,35 +335,105 @@ function _get_profile(profile, full_name) {
 }
 
 
-function _is_existed(my_array, my_text) {
-  for(var i=0; i<my_array.length; i++) {
-    var full_name = my_array[i].full_name;
+function _is_existed(row_index, my_array, my_obj) {
+  /*
+    If full name is duplicated, we don't check other things. 
+    It just returns once found.
+  */
 
-    if( full_name.indexOf(my_text) !== -1 ) {
-      //test
-      console.log("duplicated: " + my_text);
-      return true;
-    }
-    else {
-      
+  var _count = 0;
+  var _msg = '';  
+
+  console.log();
+  // Check full name
+  if(_is_full_name_dup(my_array, my_obj)) {
+    ++_count;
+  }
+
+  // Check email
+  if(_is_email_dup(my_array, my_obj)) {
+    ++_count;
+  }  
+
+  // Summary similarity
+  if(_count > 0) {
+    ++row_index; // It counts from 0
+    _msg = "Summary: row " + row_index + " has " + _count + ' similarities';
+    console.log(_msg);
+    console.log();
+  }
+
+  return _count;
+}
+
+function _is_full_name_dup(my_array, my_obj) {
+  var _full_name;
+  var _distance;
+  var _my_text = my_obj.full_name;
+
+  var _msg = '';  
+  var _condi = false;  
+
+  for(var i=0; i<my_array.length; i++) {
+    _full_name = my_array[i].full_name;
+
+    // https://github.com/NaturalNode/natural
+    _distance = natural.JaroWinklerDistance(_full_name, _my_text);
+  
+    if(_distance >= 0.6) {
+      _msg = "Full name similarity: " + _my_text + " | distance: " + _distance; 
+      console.log(_msg);
+
+      // Leave now
+      return _condi = true;
     }
   }
 
-  return false;
+  return _condi;
 }
 
 
-function _destill_full_name(full_name) {
+function _is_email_dup(my_array, my_obj) {
+  var _array_text;
+  var _distance;
+  var _my_text = my_obj.email;
+
+  var _msg = '';  
+  var _condi = false;  
+
+  for(var i=0; i<my_array.length; i++) {
+    _array_text = my_array[i].email;
+
+    // https://github.com/NaturalNode/natural
+    _distance = natural.JaroWinklerDistance(_array_text, _my_text);
+  
+    if(_distance >= 0.6) {
+      _msg = "Email similarity: " + _my_text + " | distance: " + _distance; 
+      console.log(_msg);
+
+      // Leave now
+      return _condi = true;
+    }
+  }
+
+  return _condi;
+}
+
+
+function _destill_full_name(row_index, full_name) {
   // http://stackoverflow.com/questions/9932957/javascript-remove-character-from-a-string
   var the_return = '';
-
+   
   var orig_full_name = full_name;
   var title = /^Mr\s*/gi;
-
+  var _msg = '';
+  
   // http://stackoverflow.com/questions/6603015/check-whether-a-string-matches-a-regex
   if(title.test(full_name)) {
     the_return = full_name.replace(title, '');
-    console.log("Old name: " + orig_full_name + " | " + "New name: " + the_return);
+    _msg = "Summary: row " + row_index + " - Old name: " + orig_full_name 
+      + " | " + "New name: " + the_return;
+    console.log(_msg);
   }
   else {
     the_return = full_name;
@@ -355,9 +443,10 @@ function _destill_full_name(full_name) {
 }
 
 
-function _is_url_we_want(url) {
+function _is_url_we_want(row_index, url) {
   var orig_url = url;
   var condi = true;
+  var _msg = '';
 
   /*
     Sample data not what we want
@@ -369,45 +458,27 @@ function _is_url_we_want(url) {
   */
 
   if(/^https?:\/\/www\.academia\.edu$/.test(url)) {
-    console.log("not wanted url: " + url);
+    //console.log("not wanted url: " + url);
     condi = false;    
   }
   else if(/^www\.academia\.edu$/.test(url)) { 
-    console.log("not wanted url: " + url);
+    //console.log("not wanted url: " + url);
     condi = false;
   }
   else if(/^https?:\/\/www\.linkedin\.com\/hp\/\?dnr=q1HKzUxwJqMGTFjSdgquzjats9MGTFF8f5CJ$/.test(url)) {
-    console.log("not wanted url: " + url);
+    //console.log("not wanted url: " + url);
     condi = false;
   }
   else {
     condi = true;
   }
 
+  ++row_index;
+  _msg = "Summary: row " + row_index + " not wanted url, " +  url;  
+
+  console.log();  
+  console.log(_msg);
+  console.log();
+
   return condi;
-}
-
-function _print_name_apen(data) {
-  _my_apen_write(test_output_file, "\n-start-\n");
-  for(var i=0; i < data.length; ++i) {
-    _my_apen_write(test_output_file, data[i].full_name + "\n");
-  }
-  _my_apen_write(test_output_file, "\n-end-\n");
-  _my_apen_write(test_output_file, "\n\n");
-}
-
-function _my_apen_write(file_name, data) {
-  fs.appendFile(file_name, data, function(err) {
-    if (err) throw err;
-  });
-}
-
-function _my_print(data) {
-  _my_write(test_output_file, data);
-}
-
-function _my_write(file_name, data) {
-  fs.writeFile(file_name, data, function(err) {
-    if (err) throw err;
-  });
 }
