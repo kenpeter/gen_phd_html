@@ -13,6 +13,8 @@ if (process.argv.length != 5)
     process.exit(1);
 }
 
+var _is_summary_on = false; // Turn on summary for debugging.
+
 // now load the modules we need
 var csv = require('csv');      // library for processing CSV spreadsheet files
 var ejs = require('ejs');       // library for turning .ejs templates into .html files
@@ -23,6 +25,8 @@ var csv_parse = require('csv-parse');
 var Promise = require('promise');
 var validator = require('validator');
 var natural = require('natural');
+
+var changeCase = require('change-case');
 
 // make sure EJS is configured to use curly braces for templates
 ejs.open = '{{';
@@ -65,7 +69,7 @@ _parse_csv(inputFile).then(function(data){
   var email = '';
   var phone = '';  
   var school = ''; 
-  var school_lower = '';
+  //var school_lower = '';
 
   var research_area = ''; 
   var thesis = ''; 
@@ -94,52 +98,25 @@ _parse_csv(inputFile).then(function(data){
     profile = data[i][12].trim();
 
     obj.full_name = _destill_full_name(i, full_name);
+    obj.profile = profile;
+
     obj.email = email;
+    _check_email(i, email); // Output warning message only
+
+    // Assign email to full name
+    obj.full_name_html = _full_name_with_email(i, obj.full_name, obj.email);
+
     obj.school = school;
     obj.research_area = research_area;
     obj.thesis = thesis;
-    obj.profile = _get_profile(i, profile, full_name);
-
-    school_lower = obj.school.toLowerCase();
-
-
-    /*
-    if(school_lower == "asia institute") {
-      if(!_is_existed(obj_output.ai, obj.full_name)) {
-        obj_output.ai.push(obj);
-      }
-    }
-    else if(school_lower == "school of culture and communication")
-    {
-      if(!_is_existed(obj_output.cc, obj.full_name)) {
-        obj_output.cc.push(obj);
-      }
-    }
-    else if(school_lower == "school of social and political sciences") {
-      if(!_is_existed(obj_output.ssps, obj.full_name)) {
-        obj_output.ssps.push(obj);
-      }
-    }
-    else if(school_lower == "school of historical and philosophical studies") {
-      if(!_is_existed(obj_output.shaps, obj.full_name)) {
-        obj_output.shaps.push(obj);
-      }
-    }
-    else if(school_lower == "school of languages and linguistics") {
-      if(!_is_existed(obj_output.soll, obj.full_name)) {
-        obj_output.soll.push(obj);
-      }
-    }
-    else {
-      //console.log('-----else-------');
-    }
-    */
+   
+    obj.thesis_html = _refine_thesis(i, obj.thesis, obj.profile);
 
     if(_is_existed(i, obj_output.total, obj) > 0) {
 
     }
     else {
-      
+      _put_into_correct_place(obj_output, obj);
     }
 
     // Push to total array
@@ -215,8 +192,7 @@ function _write_html(data) {
 
   // Output
   console.log();
-  //console.log("Needed html");
-  //console.log(buffer);
+  console.log(buffer);
   console.log();
 }
 
@@ -231,20 +207,18 @@ function _write_html_table(data) {
     buffer += "<h3 class='school-title'>" + data[0].school + "</h3>";
     buffer += "<table class='table-student'>";
 
-    // Header  
+    // Header
     buffer += "<tr>";
-    buffer += "<th>Full name</th>";
-    buffer += "<th>Email</th>";
+    buffer += "<th width='30%'>Full name / Email</th>";
     buffer += "<th>Research area</th>";
     buffer += "<th>Thesis</th>";
     buffer += "</tr>";
 
     for(var i=0; i < data.length; i++) {
       buffer += "<tr>";
-      buffer += data[i].profile;
-      buffer += "<td>" + data[i].email  + "</td>";
+      buffer += data[i].full_name_html;
       buffer += "<td>" + data[i].research_area  + "</td>";
-      buffer += "<td>" + data[i].thesis  + "</td>";
+      buffer += "<td>" + data[i].thesis_html  + "</td>";
       buffer += "</tr>";
     }
     buffer += "</table>";
@@ -279,31 +253,104 @@ function _get_research_area(data) {
   return research_area;
 }
 
+
+function _full_name_with_email(row_index, full_name, email) {
+  var the_return = '';
+
+  // Assume full_name and email are never empty
+  if( validator.isEmail(email) ) {
+    the_return = '<td>' + '<a href="mailto:' + email + '">'+ full_name + '</a>' + '</td>';
+  }
+  else {
+    the_return = '<td>' + full_name  + '</td>';
+  }
+
+  return the_return; 
+}
+
+function _refine_thesis(row_index, thesis, profile) {
+  var the_return = '';
+
+  thesis = _convert_to_camel_case(thesis);
+
+  thesis = _add_text_to_thesis(row_index, thesis, profile);
+
+  the_return = thesis;
+
+  return the_return;
+}
+
+
+function _convert_to_camel_case(input) {
+  var the_return = '';
+
+  if(_is_all_upper_case(input)) {
+    the_return = changeCase.titleCase(input);
+  }
+  else {
+    the_return = input;
+  }  
+
+  return the_return;
+}
+
+
+function _add_text_to_thesis(row_index, thesis, profile) {
+  var the_return = '';
+  var the_text = "More information...";
+
+  // Add comma
+  if(thesis.match(/\.$/)) {
+    
+  }
+  else {
+    thesis = thesis + '.';
+  }
+
+  if(validator.isURL(profile, {require_protocol: true})) {
+    if(_is_url_we_want(row_index, profile)) {
+      the_return = thesis + ' <a href="' + profile + '">' + the_text  + '</a>';
+    }
+    else {
+      the_return = thesis;
+    }
+  }
+  else if(validator.isURL(profile, {require_protocol: false})) {
+    if(_is_url_we_want(row_index, profile)) {
+      the_return = thesis + ' <a href="' + 'http://' + profile + '">' + the_text  + '</a>';
+    }
+    else {
+      the_return = thesis;  
+    }
+  }
+  else {
+    the_return = thesis;
+  }
+
+  return the_return;
+}
+
+/*
 function _get_profile(row_index, profile, full_name) {
-  /* 
-    Sample data:
-    * yue.qiu@studio.unibo.it
-    * Empty string
-    * upi.academia.edu/HaniYulindrasari
-    * some random string
-    * 
-    * https://unimelb.academia.edu/RyanEdwards  
-  */  
+  //
+  //  Sample data:
+  //  * yue.qiu@studio.unibo.it
+  //  * Empty string
+  //  * upi.academia.edu/HaniYulindrasari
+  //  * some random string
+  //  * 
+  //  * https://unimelb.academia.edu/RyanEdwards  
 
   var the_return = '';
 
   // http://www.w3schools.com/jsref/jsref_regexp_test.asp
   if(profile === '') {
     the_return = '<td>' + full_name  + '</td>';
-
-    //console.log("empty");
   }
   else if(validator.isEmail(profile)) {
     // It turns out, we only care external url, not email.
     //the_return = '<td>' + '<a href="' + 'mailto:' + profile + '">' + full_name  + '</a></td>';
     the_return = '<td>' + full_name  + '</td>';
-
-    //console.log("email: " + the_return);
   }
   else if(validator.isURL(profile, {require_protocol: true})) {
     if(_is_url_we_want(row_index, profile)) {
@@ -312,8 +359,6 @@ function _get_profile(row_index, profile, full_name) {
     else {
       the_return = '<td>' + full_name  + '</td>';
     }
-
-    //console.log("url: " + the_return);
   }
   else if(validator.isURL(profile, {require_protocol: false})) {
     if(_is_url_we_want(row_index, profile)) {
@@ -322,18 +367,14 @@ function _get_profile(row_index, profile, full_name) {
     else {
       the_return = '<td>' + full_name  + '</td>';  
     }
-
-    //console.log("no proto url: " + the_return);
   }
   else {
     the_return = '<td>' + full_name  + '</td>';
-
-    //console.log("else set empty: " + profile)
   }
 
   return the_return;
 }
-
+*/
 
 function _is_existed(row_index, my_array, my_obj) {
   /*
@@ -344,7 +385,6 @@ function _is_existed(row_index, my_array, my_obj) {
   var _count = 0;
   var _msg = '';  
 
-  console.log();
   // Check full name
   if(_is_full_name_dup(my_array, my_obj)) {
     ++_count;
@@ -355,12 +395,21 @@ function _is_existed(row_index, my_array, my_obj) {
     ++_count;
   }  
 
+  // Check email
+  if(_is_thesis_title_dup(my_array, my_obj)) {
+    ++_count;
+  }
+
   // Summary similarity
   if(_count > 0) {
-    ++row_index; // It counts from 0
-    _msg = "Summary: row " + row_index + " has " + _count + ' similarities';
-    console.log(_msg);
-    console.log();
+    if(_is_summary_on) {  
+      ++row_index; // It counts from 0
+      _msg = "Summary: row " + row_index + " has " + _count + ' similarities';
+
+      console.log();
+      console.log(_msg);
+      console.log();
+    }
   }
 
   return _count;
@@ -380,7 +429,7 @@ function _is_full_name_dup(my_array, my_obj) {
     // https://github.com/NaturalNode/natural
     _distance = natural.JaroWinklerDistance(_full_name, _my_text);
   
-    if(_distance >= 0.6) {
+    if(_distance >= 1) {
       _msg = "Full name similarity: " + _my_text + " | distance: " + _distance; 
       console.log(_msg);
 
@@ -407,7 +456,7 @@ function _is_email_dup(my_array, my_obj) {
     // https://github.com/NaturalNode/natural
     _distance = natural.JaroWinklerDistance(_array_text, _my_text);
   
-    if(_distance >= 0.6) {
+    if(_distance >= 1) {
       _msg = "Email similarity: " + _my_text + " | distance: " + _distance; 
       console.log(_msg);
 
@@ -418,6 +467,39 @@ function _is_email_dup(my_array, my_obj) {
 
   return _condi;
 }
+
+
+function _is_thesis_title_dup(my_array, my_obj) {
+  var _array_text;
+  var _distance;
+  var _my_text = my_obj.thesis;
+
+  var _msg = '';  
+  var _condi = false;  
+
+  for(var i=0; i<my_array.length; i++) {
+    _array_text = my_array[i].thesis;
+
+    // https://github.com/NaturalNode/natural
+    _distance = natural.JaroWinklerDistance(_array_text, _my_text);
+  
+    /*
+      Sample data: Symbols of Community Identity in the Greek Polis in Asia Minor: the Observer through Time (2nd century BC to the 3rd century AD)
+
+      Symbols of Community Identity in the Greek Polis in Asia Minor
+    */
+    if(_distance >= 0.9) {
+      _msg = "Thesis similarity: " + _my_text + " | distance: " + _distance; 
+      console.log(_msg);
+
+      // Leave now
+      return _condi = true;
+    }
+  }
+
+  return _condi;
+}
+
 
 
 function _destill_full_name(row_index, full_name) {
@@ -431,9 +513,13 @@ function _destill_full_name(row_index, full_name) {
   // http://stackoverflow.com/questions/6603015/check-whether-a-string-matches-a-regex
   if(title.test(full_name)) {
     the_return = full_name.replace(title, '');
-    _msg = "Summary: row " + row_index + " - Old name: " + orig_full_name 
-      + " | " + "New name: " + the_return;
-    console.log(_msg);
+
+    if(_is_summary_on) {
+      ++row_index;
+      _msg = "Summary: row " + row_index + " - Old name: " + orig_full_name 
+        + " | " + "New name: " + the_return;
+      console.log(_msg);
+    }
   }
   else {
     the_return = full_name;
@@ -473,12 +559,92 @@ function _is_url_we_want(row_index, url) {
     condi = true;
   }
 
-  ++row_index;
-  _msg = "Summary: row " + row_index + " not wanted url, " +  url;  
+  if(condi === false) {
+    if(_is_summary_on) {
+      ++row_index;
+      _msg = "Summary: row " + row_index + " not wanted url, " +  url;  
 
-  console.log();  
-  console.log(_msg);
-  console.log();
+      console.log();  
+      console.log(_msg);
+      console.log();
+    }
+  }
 
   return condi;
 }
+
+function _check_email(row_index, email) {
+  var _pattern = "unimelb.edu.au";
+  var _num = email.search(_pattern);  
+
+  var _pattern_1 = "pgrad.unimelb.edu.au";
+  var _num_1 = email.search(_pattern_1);
+  var _msg = '';
+  ++row_index;
+
+  // Contain unimelb.edu.au?
+  if(_num !== -1) {
+    
+  }
+  else {
+    if(_is_summary_on) {
+      _msg = "Summary: row " + row_index + " not " + _pattern + ' address: ' + email;
+      console.log();
+      console.log(_msg);
+      console.log();
+    }
+  }
+  
+  if(_num_1 !== -1) {
+    if(_is_summary_on) {
+      _msg = "Summary: row " + row_index + " invalid " + _pattern_1 + ' address: ' + email;
+      console.log();
+      console.log(_msg);
+      console.log();
+    }
+  }
+  else {
+
+  }
+
+}
+
+
+function _put_into_correct_place(obj_output, obj) {
+  var school_lower = obj.school.toLowerCase();
+  
+  if(school_lower == "asia institute") {
+    obj_output.ai.push(obj);
+  }
+  else if(school_lower == "school of culture and communication")
+  {
+    obj_output.cc.push(obj);
+  }
+  else if(school_lower == "school of social and political sciences") {
+    obj_output.ssps.push(obj);
+  }
+  else if(school_lower == "school of historical and philosophical studies") {
+    obj_output.shaps.push(obj);
+  }
+  else if(school_lower == "school of languages and linguistics") {
+    obj_output.soll.push(obj);
+  }
+  else {
+    //console.log('-----else-------');
+  }
+}
+
+function _is_all_upper_case(str) {
+  return str === str.toUpperCase();
+}
+
+// usage (note: character position is zero based)
+// 'hi There'.charAtIsUpper(3);      //=> true
+// 'BLUE CURAÇAO'.charAtIsUpper(9);  //=> true
+//'Hello, World!'.charAtIsUpper(5); //=> false
+String.prototype.charAtIsUpper = function (atpos){
+  var chr = this.charAt(atpos);
+  return /[A-Z]|[\u0080-\u024F]/.test(chr) && chr === chr.toUpperCase();
+};
+
+
